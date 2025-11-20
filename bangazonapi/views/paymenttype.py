@@ -52,33 +52,34 @@ class Payments(ViewSet):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     def retrieve(self, request, pk=None):
-        """Handle GET requests for single payment type
-
-        Returns:
-            Response -- JSON serialized payment_type instance
-        """
+        """Handle GET requests for single payment type"""
         try:
-            payment_type = Payment.objects.get(pk=pk)
-            serializer = PaymentSerializer(payment_type, context={"request": request})
+            customer = Customer.objects.get(user=request.auth.user)
+
+            # Only allow access to this user's payment methods
+            payment_type = Payment.objects.get(pk=pk, customer=customer)
+
+            serializer = PaymentSerializer(
+                payment_type, context={'request': request})
             return Response(serializer.data)
+        except Payment.DoesNotExist:
+            return Response({'message': 'Payment method not found'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as ex:
             return HttpResponseServerError(ex)
 
     def destroy(self, request, pk=None):
-        """Handle DELETE requests for a single payment type
-
-        Returns:
-            Response -- 200, 404, or 500 status code
-        """
+        """Handle DELETE requests for a single payment type"""
         try:
-            payment = Payment.objects.get(pk=pk)
+            customer = Customer.objects.get(user=request.auth.user)
+
+            # Only allow deleting this user's payment methods
+            payment = Payment.objects.get(pk=pk, customer=customer)
             payment.delete()
 
             return Response({}, status=status.HTTP_204_NO_CONTENT)
 
-        except Payment.DoesNotExist as ex:
-            return Response({"message": ex.args[0]}, status=status.HTTP_404_NOT_FOUND)
-
+        except Payment.DoesNotExist:
+            return Response({'message': 'Payment method not found'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as ex:
             return Response(
                 {"message": ex.args[0]}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -86,12 +87,11 @@ class Payments(ViewSet):
 
     def list(self, request):
         """Handle GET requests to payment type resource"""
-        payment_types = Payment.objects.all()
+        # Get the current authenticated user's customer
+        customer = Customer.objects.get(user=request.auth.user)
 
-        customer_id = self.request.query_params.get("customer", None)
-
-        if customer_id is not None:
-            payment_types = payment_types.filter(customer__id=customer_id)
+        # Only get payment types for THIS customer
+        payment_types = Payment.objects.filter(customer=customer)
 
         serializer = PaymentSerializer(
             payment_types, many=True, context={"request": request}
