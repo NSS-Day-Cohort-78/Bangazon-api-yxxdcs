@@ -18,5 +18,5 @@ class Payment(SafeDeleteModel):
         default="0000-00-00",
     )
     create_date = models.DateField(
-        default="0000-00-00",
+        auto_now_add=True,
     )
