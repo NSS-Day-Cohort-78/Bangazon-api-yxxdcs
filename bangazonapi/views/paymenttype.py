@@ -39,10 +39,9 @@ class Payments(ViewSet):
             Response -- JSON serialized payment instance
         """
         new_payment = Payment()
-        new_payment.merchant_name = request.data["merchant_name"]
-        new_payment.account_number = request.data["account_number"]
-        new_payment.expiration_date = request.data["create_date"]
-        new_payment.create_date = request.data["expiration_date"]
+        new_payment.merchant_name = request.data["merchant"]
+        new_payment.account_number = request.data["acctNumber"]
+        new_payment.expiration_date = request.data["expirationDate"]
         customer = Customer.objects.get(user=request.auth.user)
         new_payment.customer = customer
         new_payment.save()
