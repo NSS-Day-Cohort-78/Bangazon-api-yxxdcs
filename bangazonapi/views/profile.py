@@ -10,9 +10,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
-from bangazonapi.models import Order, Customer, Product
-from bangazonapi.models import OrderProduct, Favorite
-from bangazonapi.models import Recommendation
+from bangazonapi.models import Order, Customer, Product, Recommendation, OrderProduct, Favorite, Like
 from .product import ProductSerializer
 from .order import OrderSerializer
 
@@ -89,6 +87,7 @@ class Profile(ViewSet):
             current_user.recommends = Recommendation.objects.filter(
                 customer=current_user
             )
+            current_user.likes = Like.objects.filter(customer=current_user)
             current_user.recommended_by = Recommendation.objects.filter(
                 recommender=current_user
             )
@@ -375,6 +374,9 @@ class ProfileProductSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "name",
+            "price",
+            "description",
+            "image_path",
         )
 
 
@@ -405,6 +407,17 @@ class RecommendedBySerializer(serializers.ModelSerializer):
             "customer",
         )
 
+class LikeSerializer(serializers.ModelSerializer):
+    """JSON serializer for likes"""
+    product = ProfileProductSerializer()
+
+    class Meta:
+        model = Like
+        fields = (
+            "product",
+        )
+
+
 
 class ProfileSerializer(serializers.ModelSerializer):
     """JSON serializer for customer profile
@@ -416,6 +429,7 @@ class ProfileSerializer(serializers.ModelSerializer):
     user = UserSerializer(many=False)
     recommends = RecommenderSerializer(many=True)
     recommended_by = RecommendedBySerializer(many=True)
+    likes = LikeSerializer(many=True)
 
     class Meta:
         model = Customer
@@ -428,6 +442,7 @@ class ProfileSerializer(serializers.ModelSerializer):
             "payment_types",
             "recommends",
             "recommended_by",
+            "likes",
         )
         depth = 1
 
