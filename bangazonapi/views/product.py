@@ -1,7 +1,6 @@
 """View module for handling requests about products"""
 
 from rest_framework.decorators import action
-from bangazonapi.models.recommendation import Recommendation
 import base64
 from django.core.files.base import ContentFile
 from django.http import HttpResponseServerError
@@ -9,7 +8,7 @@ from rest_framework.viewsets import ViewSet
 from rest_framework.response import Response
 from rest_framework import serializers
 from rest_framework import status
-from bangazonapi.models import Product, Customer, ProductCategory
+from bangazonapi.models import Product, Customer, ProductCategory, Like, Recommendation
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.parsers import MultiPartParser, FormParser
 
@@ -19,19 +18,9 @@ class ProductSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Product
-        fields = (
-            "id",
-            "name",
-            "price",
-            "number_sold",
-            "description",
-            "quantity",
-            "created_date",
-            "location",
-            "image_path",
-            "average_rating",
-            "can_be_rated",
-        )
+        fields = ('id', 'name', 'price', 'number_sold', 'description',
+                  'quantity', 'created_date', 'location', 'image_path',
+                  'average_rating', 'can_be_rated', 'is_liked', )
         depth = 1
 
 
@@ -167,8 +156,19 @@ class Products(ViewSet):
         """
         try:
             product = Product.objects.get(pk=pk)
-            serializer = ProductSerializer(product, context={"request": request})
+
+            if request.auth and request.auth.user:
+                current_customer = Customer.objects.get(user=request.auth.user)
+                product.is_liked = Like.objects.filter(
+                    customer=current_customer,
+                    product=product
+                ).exists()
+            else:
+                product.is_liked = False
+
+            serializer = ProductSerializer(product, context={'request': request})
             return Response(serializer.data)
+
         except Exception as ex:
             return HttpResponseServerError(ex)
 
@@ -297,6 +297,21 @@ class Products(ViewSet):
         if location is not None:
             products = products.filter(location__contains=location)
 
+        if request.auth and request.auth.user:
+            from bangazonapi.models import Like
+            current_customer = Customer.objects.get(user=request.auth.user)
+
+            for product in products:
+                # Check if this product is liked by current user
+                product.is_liked = Like.objects.filter(
+                    customer=current_customer,
+                    product=product
+                ).exists()
+        else:
+            # If not authenticated, nothing is liked
+            for product in products:
+                product.is_liked = False
+
         if min_price is not None:
             products = products.filter(price__gte=min_price)
 
@@ -320,3 +335,43 @@ class Products(ViewSet):
             return Response(None, status=status.HTTP_204_NO_CONTENT)
 
         return Response(None, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    @action(methods=['post', 'delete'], detail=True)
+    def like(self, request, pk=None):
+        """Like/Unlike product"""
+
+        if request.method == "POST":
+            existing_like = Like.objects.filter(customer__user=request.auth.user, product_id=pk).first()
+
+            if not existing_like:
+                like = Like()
+                like.customer = Customer.objects.get(user=request.auth.user)
+                like.product = Product.objects.get(pk=pk)
+
+                like.save()
+
+                return Response(None, status=status.HTTP_204_NO_CONTENT)
+            else:
+                return Response({'message': 'Already liked'}, status=status.HTTP_400_BAD_REQUEST)
+
+        elif request.method == "DELETE":
+
+            try:
+                like = Like.objects.get(customer__user=request.auth.user, product_id=pk)
+                like.delete()
+                return Response(None, status=status.HTTP_204_NO_CONTENT)
+            except Like.DoesNotExist:
+                return Response({'message': 'Like not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    @action(methods=['get'], detail=False)
+    def liked(self, request):
+        """Get all products liked by the current user"""
+        customer = Customer.objects.get(user=request.auth.user)
+        likes = Like.objects.filter(customer=customer)
+        products = [like.product for like in likes]
+
+        for product in products:
+            product.is_liked =True
+
+        serializer = ProductSerializer(products, many=True, context={'request': request})
+        return Response(serializer.data)

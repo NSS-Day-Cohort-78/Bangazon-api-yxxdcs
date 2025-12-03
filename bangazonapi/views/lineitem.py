@@ -1,4 +1,3 @@
-
 """View module for handling requests about line items"""
 from django.http import HttpResponseServerError
 from rest_framework.viewsets import ViewSet

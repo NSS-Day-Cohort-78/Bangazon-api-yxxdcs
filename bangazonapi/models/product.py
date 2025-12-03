@@ -67,6 +67,17 @@ class Product(SafeDeleteModel):
         self.__can_be_rated = value
 
     @property
+    def is_liked(self):
+        """is_liked property, calculated per user
+        Returns:
+            boolean -- If the current user has liked the product or not"""
+        return self.__is_liked
+
+    @is_liked.setter
+    def is_liked(self, value):
+        self.__is_liked = value
+
+    @property
     def average_rating(self):
         """Average rating calculated attribute for each product
 
